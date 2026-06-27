@@ -1,212 +1,131 @@
 # ai/complex/and_or_search.py
 import time
-import copy
+
+from ai.limits import SearchLimit
 from ai.search_result import SearchResult
+from ai.utils import action_to_text, safe_apply_action
 
 
-def and_or_solve(start_state, rules, max_depth=8):
+def and_or_solve(start_state, rules, max_depth=8, max_nodes=20000, max_seconds=3.0):
     """
-    AND-OR Graph Search for Squirrel Go Nuts.
+    AND-OR graph search from AIMA, adapted to a nondeterministic demo mode.
 
-    Môi trường không xác định:
-    - Một hành động có thể tạo ra nhiều kết quả.
-    - Ở đây mô phỏng Slippery Mode:
-        Outcome 1: đi/trượt 1 lần theo action.
-        Outcome 2: nếu sau outcome 1 vẫn đi tiếp được thì trượt thêm 1 lần nữa.
-
-    Kết quả trả về:
-    - Conditional plan tree.
-    - Sample path để UI có thể demo tuyến tính.
+    OR nodes are agent choices.  AND nodes represent all possible environment
+    outcomes.  An action is accepted only when every outcome has a conditional
+    plan to a goal.  Squirrels Go Nuts is deterministic by default, so this file
+    uses a documented "Slippery Mode": an action may move once or, if still
+    legal, slip one extra cell in the same direction.
     """
-
     FAILURE = None
     GOAL = {"type": "goal"}
 
     start_time = time.time()
-
-    steps = [
-        (
-            0,
-            "Bắt đầu AND-OR Graph Search: môi trường không xác định, trượt 1 hoặc 2 ô",
-            start_state,
-        )
-    ]
-
+    limit = SearchLimit(max_nodes, max_seconds)
+    steps = [(0, "Khởi tạo AND-OR Search: OR=agent chọn, AND=môi trường trả outcomes", start_state)]
     step_num = [1]
     visited_count = [0]
     generated_count = [0]
+    outcome_count = [0]
+    reason = ["search_exhausted"]
 
-    # =========================
-    # Safe action application
-    # =========================
-    def safe_apply_action(state, action):
-        """
-        Đảm bảo apply_action không làm hỏng state gốc.
-
-        Nếu rules.apply_action() đã trả state mới thì vẫn ổn.
-        Nếu rules.apply_action() lỡ mutate state truyền vào,
-        ta vẫn bảo vệ state gốc bằng deepcopy trước.
-        """
-
-        state_copy = copy.deepcopy(state)
-        result = rules.apply_action(state_copy, action)
-
-        # Nếu apply_action trả về None, xem state_copy là state sau khi bị mutate.
-        if result is None:
-            return state_copy
-
-        # Deepcopy thêm một lần để tránh các nhánh AND dùng chung object.
-        return copy.deepcopy(result)
-
-    # =========================
-    # Non-deterministic outcomes
-    # =========================
     def get_outcomes(state, action):
-        """
-        Sinh tất cả kết quả có thể xảy ra của một action.
-
-        Outcome 1:
-            Di chuyển/trượt bình thường 1 lần.
-
-        Outcome 2:
-            Nếu sau Outcome 1 vẫn có thể đi tiếp cùng hướng,
-            quân trượt thêm 1 lần nữa.
-        """
-
+        """Return nondeterministic Slippery Mode outcomes without mutating state."""
         outcomes = {}
 
-        # Outcome 1: đi 1 lần
-        st1 = safe_apply_action(state, action)
-        outcomes[st1.encode()] = st1
+        one_step = safe_apply_action(state, rules, action)
+        outcomes[one_step.encode()] = one_step
 
-        # Outcome 2: trượt thêm 1 lần nếu còn đi được
-        pid, direction = action
+        piece_id, direction = action
+        if rules.can_move(one_step, piece_id, direction):
+            two_steps = safe_apply_action(one_step, rules, action)
+            outcomes[two_steps.encode()] = two_steps
 
-        if rules.can_move(st1, pid, direction):
-            st2 = safe_apply_action(st1, action)
-            outcomes[st2.encode()] = st2
+        result = list(outcomes.values())
+        outcome_count[0] += len(result)
+        return result
 
-        return list(outcomes.values())
-
-    # =========================
-    # OR search
-    # =========================
     def or_search(state, path, depth):
-        """
-        OR node:
-        Agent được quyền chọn một action.
-
-        Nếu có ít nhất một action mà mọi outcome đều giải được,
-        thì action đó được chọn.
-        """
-
         visited_count[0] += 1
 
+        if limit.reached(visited_count[0] + generated_count[0]):
+            reason[0] = limit.reason(visited_count[0] + generated_count[0]) or "resource_limit"
+            steps.append((step_num[0], f"OR dừng vì {reason[0]}", state))
+            step_num[0] += 1
+            return FAILURE
+
         if state.is_goal():
-            steps.append(
-                (
-                    step_num[0],
-                    f"OR: Gặp trạng thái goal ở độ sâu {depth}",
-                    state,
-                )
-            )
+            steps.append((step_num[0], f"OR gặp goal tại depth={depth}", state))
             step_num[0] += 1
             return GOAL
 
         if depth >= max_depth:
-            steps.append(
-                (
-                    step_num[0],
-                    f"OR: Dừng vì đạt giới hạn độ sâu max_depth={max_depth}",
-                    state,
-                )
-            )
+            reason[0] = "depth_limit"
+            steps.append((step_num[0], f"OR cutoff vì depth={depth} đạt max_depth={max_depth}", state))
             step_num[0] += 1
             return FAILURE
 
         state_code = state.encode()
-
         if state_code in path:
-            steps.append(
-                (
-                    step_num[0],
-                    "OR: Phát hiện chu trình, trạng thái này đã nằm trên path hiện tại",
-                    state,
-                )
-            )
+            reason[0] = "cycle_in_path"
+            steps.append((step_num[0], "OR bỏ nhánh vì state lặp trong path hiện tại", state))
             step_num[0] += 1
             return FAILURE
 
-        # Không dùng visited global.
-        # Path chỉ là đường đi từ gốc đến node hiện tại.
-        new_path = path | {state_code}
-
-        legal_actions = rules.legal_actions(state)
-
+        path = path | {state_code}
+        legal_actions = list(rules.legal_actions(state))
         steps.append(
             (
                 step_num[0],
-                f"OR: Mở rộng trạng thái ở độ sâu {depth}, có {len(legal_actions)} action hợp lệ",
+                f"OR mở rộng depth={depth}, legal_actions={len(legal_actions)}",
                 state,
             )
         )
         step_num[0] += 1
 
-        # OR branch: thử từng action
+        if not legal_actions:
+            reason[0] = "no_legal_action"
+            steps.append((step_num[0], "OR thất bại vì không có action hợp lệ", state))
+            step_num[0] += 1
+            return FAILURE
+
         for action in legal_actions:
-            outcomes_list = get_outcomes(state, action)
-            generated_count[0] += len(outcomes_list)
-
-            pid, direction = action
-
+            outcomes = get_outcomes(state, action)
+            generated_count[0] += len(outcomes)
             steps.append(
                 (
                     step_num[0],
-                    f"OR: Thử action ({pid}, {direction}) -> sinh {len(outcomes_list)} outcome AND",
+                    f"OR thử {action_to_text(action)} -> sinh {len(outcomes)} outcome cho AND",
                     state,
                 )
             )
             step_num[0] += 1
 
-            # Log đủ tất cả outcomes
-            for idx, out_state in enumerate(outcomes_list, start=1):
+            for index, outcome_state in enumerate(outcomes, start=1):
                 steps.append(
                     (
                         step_num[0],
-                        f"AND outcome {idx}/{len(outcomes_list)} của action ({pid}, {direction})",
-                        out_state,
+                        f"AND outcome {index}/{len(outcomes)} của {action_to_text(action)}",
+                        outcome_state,
                     )
                 )
                 step_num[0] += 1
 
-            subplan = and_search(
-                states=outcomes_list,
-                path=new_path,
-                depth=depth + 1,
-                action=action,
-            )
-
-            # Nếu tất cả outcome đều có plan, chọn action này
+            subplan = and_search(outcomes, path, depth + 1, action)
             if subplan is not FAILURE:
                 steps.append(
                     (
                         step_num[0],
-                        f"OR: Chấp nhận action ({pid}, {direction}) vì mọi outcome đều giải được",
+                        f"OR chọn {action_to_text(action)} vì mọi outcome đều có plan",
                         state,
                     )
                 )
                 step_num[0] += 1
-
-                return {
-                    "type": "action",
-                    "action": action,
-                    "branches": subplan,
-                }
+                return {"type": "action", "action": action, "branches": subplan}
 
             steps.append(
                 (
                     step_num[0],
-                    f"OR: Loại action ({pid}, {direction}) vì có ít nhất một outcome thất bại",
+                    f"OR loại {action_to_text(action)} vì ít nhất một outcome thất bại",
                     state,
                 )
             )
@@ -214,104 +133,62 @@ def and_or_solve(start_state, rules, max_depth=8):
 
         return FAILURE
 
-    # =========================
-    # AND search
-    # =========================
     def and_search(states, path, depth, action):
-        """
-        AND node:
-        Môi trường có thể trả về nhiều outcome.
-
-        Một action chỉ thành công nếu TẤT CẢ outcome đều có plan đi tới goal.
-        """
-
         branches = {}
-
-        pid, direction = action
-
         steps.append(
             (
                 step_num[0],
-                f"AND: Kiểm tra tất cả outcome của action ({pid}, {direction})",
-                states[0] if states else None,
+                f"AND kiểm tra {len(states)} outcome của {action_to_text(action)}",
+                states[0] if states else start_state,
             )
         )
         step_num[0] += 1
 
-        for idx, out_state in enumerate(states, start=1):
+        for index, outcome_state in enumerate(states, start=1):
             steps.append(
                 (
                     step_num[0],
-                    f"AND: Gọi OR_SEARCH cho outcome {idx}/{len(states)}",
-                    out_state,
+                    f"AND gọi OR cho outcome {index}/{len(states)}",
+                    outcome_state,
                 )
             )
             step_num[0] += 1
 
-            subplan = or_search(out_state, path, depth)
-
+            subplan = or_search(outcome_state, path, depth)
             if subplan is FAILURE:
                 steps.append(
                     (
                         step_num[0],
-                        f"AND: Outcome {idx}/{len(states)} thất bại -> action không dùng được",
-                        out_state,
+                        f"AND thất bại tại outcome {index}/{len(states)} -> action bị loại",
+                        outcome_state,
                     )
                 )
                 step_num[0] += 1
                 return FAILURE
 
-            branches[out_state.encode()] = subplan
+            branches[outcome_state.encode()] = subplan
 
-        steps.append(
-            (
-                step_num[0],
-                f"AND: Tất cả {len(states)} outcome đều có plan",
-                states[0] if states else None,
-            )
-        )
+        steps.append((step_num[0], f"AND thành công: cả {len(states)} outcome đều có plan", states[0]))
         step_num[0] += 1
-
         return branches
 
-    # =========================
-    # Run algorithm
-    # =========================
     result_plan = or_search(start_state, path=set(), depth=0)
     solved = result_plan is not FAILURE
+    if solved:
+        reason[0] = "goal_plan_found"
 
-    # =========================
-    # Extract sample linear path
-    # =========================
     sample_path = []
-
     if solved and isinstance(result_plan, dict):
-        curr_plan = result_plan
-        curr_state = start_state
-
-        while isinstance(curr_plan, dict) and curr_plan.get("type") == "action":
-            act = curr_plan["action"]
-            sample_path.append(act)
-
-            outcomes = get_outcomes(curr_state, act)
-
+        current_plan = result_plan
+        current_state = start_state
+        while isinstance(current_plan, dict) and current_plan.get("type") == "action":
+            action = current_plan["action"]
+            sample_path.append(action)
+            outcomes = get_outcomes(current_state, action)
             if not outcomes:
                 break
-
-            # Chọn outcome đầu tiên làm đường demo tuyến tính cho visualizer
-            curr_state = outcomes[0]
-            curr_plan = curr_plan["branches"].get(curr_state.encode())
-
-    # =========================
-    # Return result
-    # =========================
-    extra_info = {
-        "plan_tree": str(result_plan),
-        "note": (
-            "AND-OR Search dùng Slippery Mode: mỗi action có thể sinh nhiều outcome. "
-            "Sample path chỉ là một nhánh đại diện để UI chạy demo tuyến tính."
-        ),
-    }
+            current_state = outcomes[0]
+            current_plan = current_plan["branches"].get(current_state.encode())
 
     return SearchResult(
         algorithm="AND-OR Search",
@@ -321,5 +198,11 @@ def and_or_solve(start_state, rules, max_depth=8):
         generated_count=generated_count[0],
         elapsed_time=time.time() - start_time,
         steps=steps,
-        extra=extra_info,
+        extra={
+            "plan_tree": str(result_plan),
+            "sample_path_note": "Sample path chọn outcome đầu tiên để UI demo tuyến tính.",
+            "nondeterministic_model": "Slippery Mode giả lập: action đi 1 ô hoặc trượt thêm 1 ô nếu còn hợp lệ.",
+            "outcome_count": outcome_count[0],
+            "reason": reason[0],
+        },
     )

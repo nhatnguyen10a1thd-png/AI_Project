@@ -12,6 +12,8 @@ from core.rules import BoardRules
 from core.constants import BG_COLOR, PANEL_COLOR, TEXT_COLOR, TEXT_MUTED, BORDER_COLOR
 from ai.solver_interface import ALGORITHMS, solve
 
+ADVERSARIAL_ALGORITHMS = {"Minimax", "Alpha-Beta"}
+
 class GameScreen(ScreenBase):
     """Màn hình chơi game chính hỗ trợ cả chế độ tự chơi và chế độ chạy AI."""
     def __init__(self, app):
@@ -242,17 +244,27 @@ class GameScreen(ScreenBase):
         # Run solver
         self.ai_start_state = self.current_state.clone()
         self.ai_result = solve(algo, self.ai_start_state, self.rules)
-        if self.ai_result.solved:
+        has_adversarial_playout = algo in ADVERSARIAL_ALGORITHMS and bool(self.ai_result.path)
+        if self.ai_result.solved or has_adversarial_playout:
             self.ai_path = self.ai_result.path
             self.ai_step_idx = 0
             self.ai_play_timer = 0.0
-            self.set_ai_playing(False)
-            self.toast.show(f"Đã giải thành công! Lời giải gồm {len(self.ai_path)} bước.")
-        else:
-            self.ai_path = []
-            self.ai_play_timer = 0.0
-            self.set_ai_playing(False)
-            self.toast.show(f"Thuật toán {algo} KHÔNG tìm được lời giải.")
+            self.current_state = self.ai_start_state.clone()
+            self.selected_piece_id = None
+            self.active_animation = {}
+            self.animating_action = None
+            self.set_ai_playing(has_adversarial_playout)
+            if self.ai_result.solved:
+                self.toast.show(f"Đã giải thành công, có {len(self.ai_path)} bước.")
+            else:
+                self.toast.show(f"Chưa thắng goal, có {len(self.ai_path)} nước mô phỏng đối kháng.")
+            return
+
+        self.ai_path = []
+        self.ai_play_timer = 0.0
+        self.set_ai_playing(False)
+        self.toast.show(f"Thuật toán {algo} không tìm được lời giải.")
+        return
 
     def ai_next_step(self):
         if not self.ai_path or self.ai_step_idx >= len(self.ai_path):
@@ -517,6 +529,12 @@ class GameScreen(ScreenBase):
                     f"Nút đã sinh   (Generated): {self.ai_result.generated_count:,}",
                     f"Thời gian chạy:  {self.ai_result.elapsed_time * 1000:.2f} ms",
                 ]
+                if (
+                    self.ai_result.algorithm in ADVERSARIAL_ALGORITHMS
+                    and self.ai_path
+                    and not self.ai_result.solved
+                ):
+                    stats_lines[0] = "Trạng thái: Mô phỏng đối kháng chưa thắng goal"
                 for idx, line in enumerate(stats_lines):
                     surface.blit(body_font.render(line, True, TEXT_COLOR), (rp_x, stats_y + 14 + idx * 30))
             else:

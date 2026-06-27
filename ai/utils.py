@@ -1,4 +1,6 @@
 # ai/utils.py
+import copy
+
 
 class SearchNode:
     """Represents a node in the search tree."""
@@ -24,3 +26,34 @@ def reconstruct_path(node):
             actions.append(curr.action)
         curr = curr.parent
     return actions[::-1], states[::-1]
+
+
+def clone_state(state):
+    """Return an isolated copy of a GameState-like object."""
+    if hasattr(state, "clone"):
+        return state.clone()
+    return copy.deepcopy(state)
+
+
+def safe_apply_action(state, rules, action):
+    """
+    Apply an action on a cloned state and return an isolated successor state.
+
+    BoardRules.apply_action currently returns a fresh GameState, but search
+    algorithms should not rely on that implementation detail.  This helper
+    protects the parent node even if a future rules object mutates the state it
+    receives or returns None after mutating in place.
+    """
+    working_state = clone_state(state)
+    result = rules.apply_action(working_state, action)
+    if result is None:
+        result = working_state
+    return clone_state(result)
+
+
+def action_to_text(action):
+    """Human-readable action label for logs."""
+    if action is None:
+        return "PASS"
+    piece_id, direction = action
+    return f"{piece_id} {direction}"

@@ -1,80 +1,158 @@
 # ai/csp/min_conflicts.py
-import time
 import random
-from ai.search_result import SearchResult
+import time
 
-def min_conflicts_solve(start_state, rules, k=15, max_steps=100):
+from ai.search_result import SearchResult
+from ai.utils import action_to_text, safe_apply_action
+
+
+def min_conflicts_solve(start_state, rules, k=15, max_steps=100, seed=None):
     """
-    Solves the puzzle using CSP Min-Conflicts.
-    Variables: X_0, X_1, ..., X_k-1 (actions in a path of length k).
-    Domain of X_i: All possible actions (piece_id, direction) for movable pieces.
+    Min-Conflicts local search adapted to action-plan CSPs.
+
+    Variables A_0..A_{k-1} are planned actions.  The domain is every direction
+    for every movable piece in the start state.  Conflicts include illegal
+    actions at execution time, repeated states/cycles, and active nuts remaining
+    after k actions.  At each step the algorithm chooses a variable from the
+    conflicted variables, then assigns a domain value with the lowest conflict
+    score.
     """
     start_time = time.time()
-    
-    # 1. Get all possible actions (domain)
-    movable_pids = [pid for pid, p in start_state.pieces.items() if p.movable]
-    directions = ["UP", "DOWN", "LEFT", "RIGHT"]
-    domain = [(pid, d) for pid in movable_pids for d in directions]
-    
-    # 2. Helper to evaluate a path and count conflicts
-    def evaluate_path(path):
-        current_state = start_state
-        visited = {current_state.encode()}
-        illegal_count = 0
-        cycle_count = 0
-        states_path = [current_state]
-        
-        goal_reached_at = -1
-        
-        for idx, action in enumerate(path):
-            if goal_reached_at != -1:
-                # Goal already reached, subsequent actions don't matter (0 conflict contribution)
-                states_path.append(current_state)
-                continue
-                
-            pid, direction = action
-            if rules.can_move(current_state, pid, direction):
-                current_state = rules.apply_action(current_state, action)
-                enc = current_state.encode()
-                if enc in visited:
-                    cycle_count += 1
-                visited.add(enc)
-                if current_state.is_goal():
-                    goal_reached_at = idx
-            else:
-                illegal_count += 1
-            
-            states_path.append(current_state)
-            
-        # Count active nuts in the final state
-        remaining_nuts = sum(1 for p in current_state.pieces.values() if p.type == "squirrel" and p.has_nut)
-        
-        conflict_score = (illegal_count * 10) + (remaining_nuts * 20) + (cycle_count * 5)
-        return conflict_score, states_path, goal_reached_at
+    rng = random.Random(seed)
 
-    # 3. Initialize path randomly
-    path = [random.choice(domain) for _ in range(k)]
-    
-    steps = [(0, "Min-Conflicts: Khởi tạo chuỗi hành động ngẫu nhiên", start_state)]
+    movable_ids = [pid for pid, piece in start_state.pieces.items() if piece.movable]
+    domain = [(pid, direction) for pid in movable_ids for direction in ("UP", "DOWN", "LEFT", "RIGHT")]
+    steps = [(0, f"Khởi tạo Min-Conflicts: k={k}, domain_size={len(domain)}", start_state)]
     step_num = 1
     visited_count = 0
     generated_count = 0
 
+    if start_state.is_goal():
+        return SearchResult(
+            algorithm="Min-Conflicts",
+            solved=True,
+            path=[],
+            visited_count=1,
+            generated_count=0,
+            elapsed_time=time.time() - start_time,
+            steps=steps + [(step_num, "Goal ngay tại state khởi tạo", start_state)],
+            extra={
+                "final_conflict_score": 0,
+                "k": k,
+                "max_steps": max_steps,
+                "conflict_breakdown": {},
+                "reason": "goal_at_start",
+            },
+        )
+
+    if not domain:
+        return SearchResult(
+            algorithm="Min-Conflicts",
+            solved=False,
+            path=[],
+            visited_count=0,
+            generated_count=0,
+            elapsed_time=time.time() - start_time,
+            steps=steps + [(step_num, "Domain rỗng: không có movable piece", start_state)],
+            extra={
+                "final_conflict_score": None,
+                "k": k,
+                "max_steps": max_steps,
+                "conflict_breakdown": {"empty_domain": True},
+                "reason": "empty_domain",
+            },
+        )
+
+    def evaluate_path(path):
+        current_state = start_state
+        states_path = [current_state]
+        visited_states = {current_state.encode(): 0}
+        illegal_indices = []
+        cycle_indices = []
+        goal_reached_at = -1
+
+        for index, action in enumerate(path):
+            if goal_reached_at != -1:
+                states_path.append(current_state)
+                continue
+
+            if not rules.can_move(current_state, *action):
+                illegal_indices.append(index)
+                states_path.append(current_state)
+                continue
+
+            current_state = safe_apply_action(current_state, rules, action)
+            current_code = current_state.encode()
+            if current_code in visited_states:
+                cycle_indices.append(index)
+            visited_states[current_code] = index + 1
+            states_path.append(current_state)
+
+            if current_state.is_goal():
+                goal_reached_at = index
+
+        remaining_nuts = sum(
+            1 for piece in current_state.pieces.values()
+            if piece.type == "squirrel" and piece.has_nut
+        )
+        goal_missing = 0 if goal_reached_at != -1 else remaining_nuts
+
+        conflicted_indices = set(illegal_indices) | set(cycle_indices)
+        if goal_reached_at == -1:
+            conflicted_indices.update(range(len(path)))
+
+        conflict_breakdown = {
+            "illegal_actions": len(illegal_indices),
+            "cycle_hits": len(cycle_indices),
+            "remaining_nuts": remaining_nuts,
+            "goal_missing": goal_missing,
+            "illegal_indices": illegal_indices,
+            "cycle_indices": cycle_indices,
+        }
+        conflict_score = (
+            conflict_breakdown["illegal_actions"] * 10
+            + conflict_breakdown["cycle_hits"] * 5
+            + conflict_breakdown["goal_missing"] * 20
+        )
+        return (
+            conflict_score,
+            states_path,
+            goal_reached_at,
+            sorted(conflicted_indices),
+            conflict_breakdown,
+        )
+
+    path = [rng.choice(domain) for _ in range(k)]
+    best_path = list(path)
+    best_score, best_states, best_goal, _, best_breakdown = evaluate_path(best_path)
+
     for step in range(max_steps):
-        conflict_score, states_path, goal_reached_at = evaluate_path(path)
+        conflict_score, states_path, goal_reached_at, conflicted_indices, breakdown = evaluate_path(path)
         visited_count += 1
-        
-        # If no conflicts, or goal reached in the path
-        if conflict_score == 0 or goal_reached_at != -1:
-            # We found a path that reaches the goal!
+
+        if conflict_score < best_score or (best_goal == -1 and goal_reached_at != -1):
+            best_path = list(path)
+            best_score = conflict_score
+            best_states = states_path
+            best_goal = goal_reached_at
+            best_breakdown = breakdown
+
+        display_state = states_path[min(len(states_path) - 1, goal_reached_at + 1)] if goal_reached_at != -1 else states_path[-1]
+        steps.append(
+            (
+                step_num,
+                f"Step {step}: conflict_score={conflict_score}, conflicted_indices={conflicted_indices}",
+                display_state,
+            )
+        )
+        step_num += 1
+
+        if goal_reached_at != -1:
             actual_path = path[:goal_reached_at + 1]
             actual_states = states_path[:goal_reached_at + 2]
-            
-            # Log the successful steps for visualization
-            for idx, act in enumerate(actual_path):
-                steps.append((step_num, f"Bước {idx+1}: {act[0]} {act[1]}", actual_states[idx+1]))
+            for index, action in enumerate(actual_path, start=1):
+                steps.append((step_num, f"Solution step {index}: {action_to_text(action)}", actual_states[index]))
                 step_num += 1
-                
             return SearchResult(
                 algorithm="Min-Conflicts",
                 solved=True,
@@ -82,39 +160,69 @@ def min_conflicts_solve(start_state, rules, k=15, max_steps=100):
                 visited_count=visited_count,
                 generated_count=generated_count,
                 elapsed_time=time.time() - start_time,
-                steps=steps
+                steps=steps,
+                extra={
+                    "final_conflict_score": conflict_score,
+                    "k": k,
+                    "max_steps": max_steps,
+                    "conflict_breakdown": breakdown,
+                    "reason": "goal_found",
+                },
             )
-            
-        # Log progress
-        steps.append((step_num, f"Vòng {step}: Xung đột = {conflict_score}", states_path[-1]))
+
+        if not conflicted_indices:
+            conflicted_indices = list(range(k))
+
+        var_index = rng.choice(conflicted_indices)
+        steps.append((step_num, f"Chọn biến xung đột A_{var_index}", states_path[min(var_index, len(states_path) - 1)]))
         step_num += 1
 
-        # Select a random variable (step) that causes a conflict
-        # A step causes a conflict if it's illegal or if it's part of the path leading to active nuts
-        # We can just select a random step index
-        var_idx = random.randint(0, k - 1)
-        
-        # Find assignment that minimizes conflicts
-        best_val = path[var_idx]
-        min_conflicts = conflict_score
-        candidates = []
-        
-        for val in domain:
-            path[var_idx] = val
+        original_value = path[var_index]
+        scored_values = []
+        for value in domain:
+            candidate_path = list(path)
+            candidate_path[var_index] = value
+            score, candidate_states, candidate_goal, _, candidate_breakdown = evaluate_path(candidate_path)
             generated_count += 1
-            score, _, _ = evaluate_path(path)
-            if score < min_conflicts:
-                min_conflicts = score
-                candidates = [val]
-            elif score == min_conflicts:
-                candidates.append(val)
-                
-        if candidates:
-            path[var_idx] = random.choice(candidates)
-        else:
-            path[var_idx] = best_val
+            scored_values.append((score, action_to_text(value), value, candidate_states, candidate_goal, candidate_breakdown))
+            steps.append(
+                (
+                    step_num,
+                    f"Thử A_{var_index}={action_to_text(value)} -> conflict_score={score}",
+                    candidate_states[min(len(candidate_states) - 1, var_index + 1)],
+                )
+            )
+            step_num += 1
 
-    # Return whatever path we ended up with (failure)
+        best_value_score = min(item[0] for item in scored_values)
+        best_values = [item for item in scored_values if item[0] == best_value_score]
+        _, _, chosen_value, _, _, _ = rng.choice(best_values)
+        path[var_index] = chosen_value
+        steps.append(
+            (
+                step_num,
+                (
+                    f"Gán A_{var_index}={action_to_text(chosen_value)} vì score thấp nhất={best_value_score} "
+                    f"(trước đó {action_to_text(original_value)})"
+                ),
+                states_path[min(var_index, len(states_path) - 1)],
+            )
+        )
+        step_num += 1
+
+    if best_goal != -1:
+        reason = "best_path_reaches_goal_but_not_current"
+    else:
+        reason = "max_steps"
+
+    steps.append(
+        (
+            step_num,
+            f"Không tìm được goal trong max_steps; best_conflict_score={best_score}, best_path_prefix={best_path}",
+            best_states[-1],
+        )
+    )
+
     return SearchResult(
         algorithm="Min-Conflicts",
         solved=False,
@@ -122,5 +230,13 @@ def min_conflicts_solve(start_state, rules, k=15, max_steps=100):
         visited_count=visited_count,
         generated_count=generated_count,
         elapsed_time=time.time() - start_time,
-        steps=steps
+        steps=steps,
+        extra={
+            "final_conflict_score": best_score,
+            "k": k,
+            "max_steps": max_steps,
+            "conflict_breakdown": best_breakdown,
+            "best_path": best_path,
+            "reason": reason,
+        },
     )
