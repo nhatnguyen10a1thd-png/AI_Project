@@ -48,7 +48,7 @@ Mảnh hoa đỏ chỉ là **mảnh cản**, không cần đưa vào lỗ.
 
 ## 3. Luật di chuyển
 
-Mỗi lượt, người chơi hoặc AI được chọn **1 mảnh** và trượt mảnh đó theo **1 trong 4 hướng**:
+Mỗi lượt, người chơi hoặc AI được chọn **1 mảnh** và trượt 1 ô mảnh đó theo **1 trong 4 hướng**:
 
 ```text
 UP

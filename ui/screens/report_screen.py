@@ -97,13 +97,16 @@ class ReportScreen(ScreenBase):
                 for name in ALGORITHMS:
                     result = self.results[name]
                     status = result.extra.get("report_status", "done")
+                    details = result.extra.get("error") or result.extra.get("reason", "")
+                    if result.extra.get("invalid_solution_path"):
+                        details = "invalid_solution_path"
                     writer.writerow([
                         self.level_meta["name"], name, status,
                         "Yes" if result.solved else "No",
                         len(result.path) if result.solved else "N/A",
                         result.visited_count, result.generated_count,
                         f"{result.elapsed_time:.6f}",
-                        result.extra.get("error", ""),
+                        details,
                     ])
             self.toast.show("Đã xuất đầy đủ báo cáo: results/algorithm_results.csv")
         except Exception as exc:
@@ -144,11 +147,15 @@ class ReportScreen(ScreenBase):
             f"Đầy đủ {len(ALGORITHMS)} thuật toán | Mỗi thuật toán được bảo vệ giới hạn RAM và thời gian.",
             True, TEXT_MUTED,
         ), (52, top + 48))
+        surface.blit(body_small.render(
+            "Visited/Generated là chỉ số tham khảo; ý nghĩa có thể khác nhau giữa các nhóm thuật toán.",
+            True, TEXT_MUTED,
+        ), (52, top + 70))
 
         # Bảng kết quả — tỷ lệ theo chiều rộng
         margin_x  = 50
         panel_w   = W - 2 * margin_x
-        panel_top = top + 78
+        panel_top = top + 96
         row_h     = max(18, min(26, (H - panel_top - 245) // max(1, len(ALGORITHMS) + 1)))
         panel_h   = row_h * (len(ALGORITHMS) + 1) + 45
         panel_rect = pygame.Rect(margin_x, panel_top, panel_w, panel_h)

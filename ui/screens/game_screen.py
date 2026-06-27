@@ -263,7 +263,11 @@ class GameScreen(ScreenBase):
         self.ai_path = []
         self.ai_play_timer = 0.0
         self.set_ai_playing(False)
-        self.toast.show(f"Thuật toán {algo} không tìm được lời giải.")
+        reason = self.ai_result.extra.get("reason") if self.ai_result else None
+        if self.ai_result and self.ai_result.extra.get("invalid_solution_path"):
+            reason = "invalid_solution_path"
+        suffix = f" ({reason})" if reason else ""
+        self.toast.show(f"Thuật toán {algo} không tìm được lời giải{suffix}.")
         return
 
     def ai_next_step(self):
@@ -498,10 +502,10 @@ class GameScreen(ScreenBase):
             instructions = [
                 "Luật chơi đơn giản:",
                 "1. Click chọn sóc nâu / đen / trắng / cam.",
-                "2. Dùng phím mũi tên hoặc WASD trượt sóc.",
-                "3. Trượt sóc qua lỗ để thả hạt dẻ vào lỗ.",
-                "4. Đưa tất cả 4 hạt dẻ vào 4 lỗ để thắng.",
-                "5. Các con sóc có thể trượt qua lỗ đã lấp.",
+                "2. Dùng phím mũi tên hoặc WASD để dịch sóc 1 ô.",
+                "3. Nếu hạt nằm trên lỗ sau nước đi, hạt sẽ rơi.",
+                "4. Thắng khi tất cả sóc trong level đã thả hạt.",
+                "5. Các lỗ đã lấp không chặn đường đi.",
                 "6. Mảnh hoa đỏ là vật cản cố định.",
             ]
             instr_y = panel_title_y + 44
@@ -529,6 +533,11 @@ class GameScreen(ScreenBase):
                     f"Nút đã sinh   (Generated): {self.ai_result.generated_count:,}",
                     f"Thời gian chạy:  {self.ai_result.elapsed_time * 1000:.2f} ms",
                 ]
+                reason = self.ai_result.extra.get("reason")
+                if self.ai_result.extra.get("invalid_solution_path"):
+                    reason = "invalid_solution_path"
+                if reason:
+                    stats_lines.append(f"Lý do dừng: {reason}")
                 if (
                     self.ai_result.algorithm in ADVERSARIAL_ALGORITHMS
                     and self.ai_path
@@ -542,7 +551,7 @@ class GameScreen(ScreenBase):
 
 
 
-            path_y = stats_y + 178
+            path_y = stats_y + 208
             pygame.draw.line(surface, BORDER_COLOR, (rp_x - 5, path_y), (W - 25, path_y), width=1)
             lbl_path = body_bold.render("Các bước di chuyển:", True, TEXT_COLOR)
             surface.blit(lbl_path, (rp_x, path_y + 10))
@@ -557,7 +566,7 @@ class GameScreen(ScreenBase):
                     act       = self.ai_path[idx]
                     highlight = (idx == self.ai_step_idx)
                     marker    = "> " if highlight else "  "
-                    text      = f"{marker}Bước {idx+1}: {act[0].upper()} trượt {act[1]}"
+                    text      = f"{marker}Bước {idx+1}: {act[0].upper()} dịch {act[1]}"
                     color     = (46, 125, 50) if highlight else TEXT_COLOR
                     step_surf = (body_bold if highlight else body_font).render(text, True, color)
                     surface.blit(step_surf, (rp_x + 10, path_y + 45 + (idx - start_i) * 27))
