@@ -259,17 +259,6 @@ Mọi solver trả về object `SearchResult` gồm:
 
 Lưu ý: `visited_count` và `generated_count` giữa các nhóm thuật toán không luôn có cùng ý nghĩa tuyệt đối. Khi viết báo cáo, nên dùng chúng như chỉ số tham khảo trong từng nhóm thuật toán.
 
-## Hạn chế hiện tại
-
-Một số điểm nên biết trước khi bảo vệ hoặc nộp project:
-
-* Action trong core là dịch 1 ô, cần trình bày thống nhất.
-* Heuristic chưa được chứng minh admissible/consistent.
-* Một số thuật toán là phiên bản thích nghi để minh họa AI, không phải luật game gốc.
-* Solver chạy đồng bộ trong UI, level khó có thể làm UI đứng tạm thời.
-* Level validation hiện đã có ở `LevelManager`, nhưng chưa kiểm tra solvability tự động.
-* Test đã có thêm core/level/heuristic, nhưng vẫn cần chạy trên môi trường có Python/Pygame và nên bổ sung UI/export tests nếu có thời gian.
-
 ## Gợi ý demo khi thuyết trình
 
 Nên demo theo thứ tự:
@@ -281,14 +270,6 @@ Nên demo theo thứ tự:
 5. Chạy Hill Climbing hoặc Simulated Annealing để nói về local search.
 6. Mở Report Screen để xuất bảng so sánh.
 7. Chỉ giới thiệu CSP/adversarial/complex như phần mở rộng học thuật.
-
-## File báo cáo kỹ thuật
-
-Repo có thể có thêm các file phân tích hoặc báo cáo như:
-
-* `PROJECT_FULL_EVALUATION.md`: đánh giá kỹ thuật toàn project.
-* `bo_luat_game_squirrels_go_nuts.md`: mô tả luật game và mô hình code.
-* `ke_hoach_code_squirrels_ai_solver.md`: kế hoạch/thiết kế ban đầu của đồ án.
 
 ## Kết luận
 
