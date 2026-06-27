@@ -259,18 +259,6 @@ Mọi solver trả về object `SearchResult` gồm:
 
 Lưu ý: `visited_count` và `generated_count` giữa các nhóm thuật toán không luôn có cùng ý nghĩa tuyệt đối. Khi viết báo cáo, nên dùng chúng như chỉ số tham khảo trong từng nhóm thuật toán.
 
-## Gợi ý demo khi thuyết trình
-
-Nên demo theo thứ tự:
-
-1. Chọn một level `starter`.
-2. Chạy BFS để giải thích tìm kiếm mù và lời giải nông nhất với cost 1.
-3. Chạy A* để so sánh informed search với BFS.
-4. Mở Algorithm Visualizer để xem log từng bước.
-5. Chạy Hill Climbing hoặc Simulated Annealing để nói về local search.
-6. Mở Report Screen để xuất bảng so sánh.
-7. Chỉ giới thiệu CSP/adversarial/complex như phần mở rộng học thuật.
-
 ## Kết luận
 
 Squirrels AI Solver là một project phù hợp để trình bày bài toán tìm kiếm trong AI: có mô hình trạng thái rõ, nhiều thuật toán, UI trực quan và màn report so sánh. Để đạt điểm cao hơn khi bảo vệ, nên ưu tiên chạy test đầy đủ, bổ sung benchmark solvability và mô tả cẩn thận những thuật toán mang tính thích nghi.
