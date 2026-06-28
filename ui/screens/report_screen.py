@@ -30,27 +30,35 @@ class ReportScreen(ScreenBase):
     def setup_ui(self):
         font_body = self.app.fonts["body_bold"]
         font_btn  = self.app.fonts["button"]
-        W = self.app.width
-        H = self.app.height
-        button_y = H - 65
-        # Các nút được đặt theo tỷ lệ chiều rộng màn hình
+        # Tạo nút với vị trí tạm — sẽ được cập nhật bởi update_layout()
         self.btn_menu = Button(
-            rect=(50, button_y, 160, 45), text="< MENU CHÍNH", font=font_body,
+            rect=(0, 0, 160, 45), text="< MENU CHÍNH", font=font_body,
             callback=lambda: self.app.switch_to_screen("main_menu"), color=(120, 115, 105),
         )
         self.btn_levels = Button(
-            rect=(230, button_y, 160, 45), text="CHỌN LEVEL", font=font_body,
+            rect=(0, 0, 160, 45), text="CHỌN LEVEL", font=font_body,
             callback=lambda: self.app.switch_to_screen("level_select", mode="report"), color=(79, 110, 138),
         )
         self.btn_run_all = Button(
-            rect=(W - 380, button_y, 170, 45), text="CHẠY TẤT CẢ", font=font_btn,
+            rect=(0, 0, 170, 45), text="CHẠY TẤT CẢ", font=font_btn,
             callback=self.run_all_algorithms, color=(46, 125, 50),
         )
         self.btn_export = Button(
-            rect=(W - 195, button_y, 170, 45), text="XUẤT FILE CSV", font=font_btn,
+            rect=(0, 0, 170, 45), text="XUẤT FILE CSV", font=font_btn,
             callback=self.export_csv_report, color=(139, 115, 85),
         )
         self.btn_export.is_enabled = False
+        self.update_layout()
+
+    def update_layout(self):
+        """Cập nhật vị trí các nút theo kích thước cửa sổ hiện tại."""
+        W = self.app.width
+        H = self.app.height
+        button_y = H - 65
+        self.btn_menu.rect.topleft     = (50, button_y)
+        self.btn_levels.rect.topleft   = (230, button_y)
+        self.btn_run_all.rect.topleft  = (W - 380, button_y)
+        self.btn_export.rect.topleft   = (W - 195, button_y)
 
     def _pending_results(self):
         return {
@@ -134,6 +142,8 @@ class ReportScreen(ScreenBase):
     def draw(self, surface):
         surface.fill(BG_COLOR)
         W, H = self.app.width, self.app.height
+        # Cập nhật vị trí nút theo kích thước cửa sổ hiện tại
+        self.update_layout()
         top = TITLEBAR_H
         title_font  = self.app.fonts["title"]
         body_font   = self.app.fonts["body"]
@@ -193,7 +203,8 @@ class ReportScreen(ScreenBase):
 
         # Biểu đồ thanh
         chart_top = panel_top + panel_h + 14
-        chart_h   = max(90, H - chart_top - 95)
+        button_y  = H - 65
+        chart_h   = max(90, button_y - chart_top - 20)
         chart_rect = pygame.Rect(margin_x, chart_top, panel_w, chart_h)
         pygame.draw.rect(surface, PANEL_COLOR, chart_rect, border_radius=14)
         pygame.draw.rect(surface, BORDER_COLOR, chart_rect, width=2, border_radius=14)
