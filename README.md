@@ -1,167 +1,49 @@
 # Squirrels AI Solver
 
-**Squirrels AI Solver** là ứng dụng Python/Pygame mô phỏng trò chơi logic **Squirrels Go Nuts** và dùng nhiều thuật toán Trí tuệ nhân tạo để giải, trực quan hóa, so sánh quá trình tìm kiếm trong không gian trạng thái.
+Ứng dụng Python/Pygame mô phỏng trò chơi logic **Squirrels Go Nuts** trên bàn cờ 4×4, tích hợp **18 thuật toán AI** để tự động giải puzzle, trực quan hóa quá trình tìm kiếm và so sánh hiệu năng giữa các thuật toán.
 
-Project được thiết kế như một đồ án AI: có core game logic, bộ level JSON, nhiều nhóm thuật toán theo tinh thần AIMA, giao diện chơi thử, màn trình diễn thuật toán và màn báo cáo hiệu năng.
+## Mục lục
 
-## Tổng quan nhanh
+- [Tính năng](#tính-năng)
+- [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
+- [Cài đặt](#cài-đặt)
+- [Chạy ứng dụng](#chạy-ứng-dụng)
+- [Hướng dẫn sử dụng](#hướng-dẫn-sử-dụng)
+- [Mô hình bài toán](#mô-hình-bài-toán)
+- [Thuật toán AI](#thuật-toán-ai)
+- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+- [Dữ liệu level](#dữ-liệu-level)
+- [SearchResult](#searchresult)
+- [Kiểm thử](#kiểm-thử)
 
-| Hạng mục | Nội dung |
-|---|---|
-| Ngôn ngữ | Python |
-| Giao diện | Pygame |
-| Bàn cờ | 4x4 |
-| Dữ liệu level | `data/book_levels.json` |
-| Số level hiện có | 32 level, gồm `starter`, `junior`, `expert`, `master` |
-| Entry point | `main.py` |
-| Solver interface | `ai/solver_interface.py` |
-| Kết quả solver | `ai/search_result.py` |
+## Tính năng
 
-## Tính năng chính
+- **Chơi thủ công** — Chọn level, click chọn mảnh squirrel và di chuyển bằng phím mũi tên hoặc `W A S D`. Hỗ trợ reset và undo.
+- **AI Solver** — Chọn thuật toán từ dropdown, giải tự động và replay từng bước lời giải. Hiển thị thống kê số node duyệt, số node sinh và thời gian chạy.
+- **Algorithm Visualizer** — Trình diễn từng trạng thái trong log duyệt của thuật toán. Hỗ trợ bước tiến/lùi, tự chạy và cuộn log.
+- **Performance Report** — Chạy toàn bộ thuật toán trên cùng một level, hiển thị bảng kết quả, biểu đồ so sánh và hỗ trợ export CSV vào thư mục `results/`.
 
-### Chơi thủ công
+## Yêu cầu hệ thống
 
-Người dùng có thể chọn level, click chọn một mảnh squirrel và dùng phím mũi tên hoặc `W A S D` để di chuyển. Game có reset, undo và popup chiến thắng.
-
-### AI Solver
-
-Người dùng chọn thuật toán từ dropdown, bấm giải AI, xem thống kê số node duyệt, số node sinh, thời gian chạy và replay từng bước lời giải.
-
-### Algorithm Visualizer
-
-Màn hình trình diễn thuật toán cho phép xem từng trạng thái trong log duyệt. Người dùng có thể bấm từng bước, tua lại, tự chạy và cuộn log.
-
-### Performance Report
-
-Màn report chạy toàn bộ thuật toán đã đăng ký trên cùng một level, hiển thị bảng kết quả, biểu đồ số node đã duyệt và hỗ trợ export CSV vào thư mục `results/`.
-
-## Mô hình game trong project
-
-Project mô hình hóa trò chơi thành bài toán tìm kiếm trạng thái:
-
-| Thành phần | Cách biểu diễn |
-|---|---|
-| State | `GameState`: danh sách pieces, holes, filled holes |
-| Piece | `Piece`: id, type, shape, anchor, nut offset, has nut, movable |
-| Board | Bàn 4x4, dùng `BOARD_SIZE = 4` |
-| Action | Tuple `(piece_id, direction)` |
-| Direction | `UP`, `DOWN`, `LEFT`, `RIGHT` |
-| Goal | Tất cả squirrel có trong level đã thả hạt |
-| State key | `state.encode()` dùng cho visited/explored |
-
-Lưu ý quan trọng về luật di chuyển: trong code hiện tại, mỗi action dịch mảnh **đúng 1 ô** theo hướng đã chọn nếu hợp lệ. Đây là mô hình được core logic và toàn bộ solver sử dụng. Vì vậy khi trình bày đồ án, nên mô tả là "di chuyển/dịch 1 ô" thay vì "trượt cho tới khi gặp vật cản".
-
-Một nước đi hợp lệ khi:
-
-1. Piece tồn tại và được phép di chuyển.
-2. Sau khi dịch 1 ô, toàn bộ piece vẫn nằm trong bàn 4x4.
-3. Piece không đè lên piece khác.
-4. Nếu hạt của squirrel nằm trên một hole chưa filled, hạt rơi xuống hole.
-
-## Thuật toán AI
-
-Tất cả thuật toán được gọi qua `solve(algorithm_name, start_state, rules, **kwargs)` trong `ai/solver_interface.py` và trả về `SearchResult`.
-
-| Nhóm | Thuật toán | File |
-|---|---|---|
-| Uninformed Search | BFS | `ai/uninformed/bfs.py` |
-| Uninformed Search | DFS | `ai/uninformed/dfs.py` |
-| Uninformed Search | IDS | `ai/uninformed/ids.py` |
-| Informed Search | Greedy Best-First Search | `ai/informed/greedy.py` |
-| Informed Search | A* | `ai/informed/astar.py` |
-| Informed Search | IDA* | `ai/informed/idastar.py` |
-| Heuristic | Minimum-assignment Manhattan nut-to-hole heuristic | `ai/informed/heuristics.py` |
-| Local Search | Hill Climbing | `ai/local_search/hill_climbing.py` |
-| Local Search | Local Beam Search | `ai/local_search/local_beam.py` |
-| Local Search | Simulated Annealing | `ai/local_search/simulated_annealing.py` |
-| Complex Environment | AND-OR Search | `ai/complex/and_or_search.py` |
-| Complex Environment | Belief-State Search | `ai/complex/belief_state_search.py` |
-| Complex Environment | Online Search / LRTA* | `ai/complex/online_search.py` |
-| CSP | Backtracking | `ai/csp/backtracking.py` |
-| CSP | AC-3 | `ai/csp/ac3.py` |
-| CSP | Min-Conflicts | `ai/csp/min_conflicts.py` |
-| Adversarial/Stochastic | Minimax | `ai/adversarial/minimax.py` |
-| Adversarial/Stochastic | Alpha-Beta Pruning | `ai/adversarial/alpha_beta.py` |
-| Adversarial/Stochastic | Expectimax | `ai/adversarial/expectimax.py` |
-
-### Ghi chú học thuật
-
-Một số nhóm thuật toán áp dụng tự nhiên vào game hơn các nhóm khác:
-
-* BFS, DFS, IDS, Greedy, A*, IDA* là các thuật toán phù hợp trực tiếp với bài toán state-space search.
-* Hill Climbing, Local Beam và Simulated Annealing dùng heuristic để minh họa local search, không đảm bảo luôn tìm được lời giải.
-* CSP được mô hình hóa theo hướng action-plan CSP. Đây là phiên bản thích nghi để phục vụ học thuật.
-* Minimax, Alpha-Beta và Expectimax là chế độ minh họa adversarial/stochastic, trong đó flower/blocker được xem như đối thủ hoặc chance node. Đây không phải luật gốc của puzzle.
-* AND-OR và Belief-State là mô hình môi trường phức tạp giả lập, dùng để minh họa conditional plan, nondeterminism và uncertainty.
-
-Heuristic hiện tại ghép các hạt chưa rơi với các lỗ trống riêng biệt sao cho tổng khoảng cách Manhattan là nhỏ nhất. Cách này mạnh hơn việc cho từng hạt tự chọn lỗ gần nhất độc lập, nhưng vẫn chưa được chứng minh admissible/consistent cho mọi cấu hình. Vì vậy không nên khẳng định A* luôn tối ưu tuyệt đối; A* tối ưu khi heuristic thỏa điều kiện lý thuyết và không bị giới hạn tài nguyên.
-
-## Cấu trúc thư mục
-
-```text
-squirrels_ai_solver/
-|-- main.py
-|-- requirements.txt
-|-- requirements-dev.txt
-|-- README.md
-|-- verify_core.py
-|-- data/
-|   |-- book_levels.json
-|-- core/
-|   |-- constants.py
-|   |-- piece.py
-|   |-- state.py
-|   |-- rules.py
-|   |-- level.py
-|-- ai/
-|   |-- solver_interface.py
-|   |-- search_result.py
-|   |-- limits.py
-|   |-- utils.py
-|   |-- uninformed/
-|   |-- informed/
-|   |-- local_search/
-|   |-- complex/
-|   |-- csp/
-|   |-- adversarial/
-|-- ui/
-|   |-- screen_manager.py
-|   |-- font.py
-|   |-- components/
-|   |-- renderers/
-|   |-- screens/
-|-- tests/
-|   |-- test_algorithm_smoke.py
-|   |-- test_core_rules.py
-|   |-- test_heuristics.py
-|   |-- test_level_validation.py
-|   |-- test_solver_contracts.py
-```
+- Python >= 3.8
+- Pygame >= 2.0
 
 ## Cài đặt
 
-Yêu cầu:
-
-* Python 3.8 trở lên.
-* Pygame 2.x.
-
-Cài dependency:
-
 ```bash
-pip install -r requirements.txt
-```
+# Clone repository
+git clone <repository-url>
+cd AI_Project
 
-Nếu dùng virtual environment trên Windows:
-
-```bash
+# (Khuyến nghị) Tạo virtual environment
 python -m venv .venv
-.venv\Scripts\activate
+source .venv/bin/activate      # macOS / Linux
+# .venv\Scripts\activate       # Windows
+
+# Cài đặt dependencies
 pip install -r requirements.txt
-```
 
-Nếu muốn chạy toàn bộ test bằng `pytest`:
-
-```bash
+# (Tùy chọn) Cài thêm dev dependencies để chạy test
 pip install -r requirements-dev.txt
 ```
 
@@ -171,94 +53,202 @@ pip install -r requirements-dev.txt
 python main.py
 ```
 
-Nếu máy dùng Python Launcher:
+## Hướng dẫn sử dụng
 
-```bash
-py main.py
+### Menu chính
+
+Ứng dụng có 4 chế độ:
+
+| Chế độ | Mô tả |
+|---|---|
+| **Chơi Game** | Tự chơi puzzle bằng tay |
+| **AI Solver** | Chọn thuật toán và xem lời giải tự động |
+| **Trình diễn thuật toán** | Xem log từng bước của quá trình tìm kiếm |
+| **Báo cáo hiệu năng** | So sánh hiệu năng tất cả thuật toán trên cùng level |
+
+### Chơi thủ công
+
+1. Chọn nhóm level và level cụ thể.
+2. Click vào một squirrel để chọn.
+3. Dùng phím mũi tên hoặc `W A S D` để di chuyển mảnh 1 ô.
+4. Dùng nút **Reset** / **Undo** khi cần.
+
+### AI Solver
+
+1. Chọn level và thuật toán từ dropdown.
+2. Bấm **Giải AI**.
+3. Dùng **Trước**, **Tiếp**, **Tự chạy** để replay lời giải.
+
+## Mô hình bài toán
+
+Project mô hình hóa trò chơi thành bài toán **tìm kiếm trong không gian trạng thái**:
+
+| Thành phần | Biểu diễn |
+|---|---|
+| **State** | `GameState` — danh sách pieces, holes, filled holes |
+| **Piece** | `Piece` — id, type, shape, anchor, nut offset, has\_nut, movable |
+| **Board** | Bàn 4×4 (`BOARD_SIZE = 4`) |
+| **Action** | Tuple `(piece_id, direction)` |
+| **Direction** | `UP`, `DOWN`, `LEFT`, `RIGHT` |
+| **Goal test** | Tất cả squirrel đã thả hạt xuống hole |
+| **State encoding** | `state.encode()` — dùng cho tập visited/explored |
+
+### Luật di chuyển
+
+- Mỗi action dịch mảnh **đúng 1 ô** theo hướng đã chọn.
+- Piece phải tồn tại và được phép di chuyển (`movable = True`).
+- Sau khi dịch, toàn bộ cells của piece phải nằm trong bàn 4×4.
+- Piece không được đè lên piece khác.
+- Nếu hạt của squirrel rơi vào vị trí hole chưa filled → hạt rơi xuống hole.
+
+## Thuật toán AI
+
+Tất cả thuật toán được gọi thống nhất qua `solve(algorithm_name, start_state, rules, **kwargs)` trong `ai/solver_interface.py` và trả về đối tượng `SearchResult`.
+
+### Uninformed Search
+
+| Thuật toán | File |
+|---|---|
+| BFS | `ai/uninformed/bfs.py` |
+| DFS | `ai/uninformed/dfs.py` |
+| IDS (Iterative Deepening Search) | `ai/uninformed/ids.py` |
+
+### Informed Search
+
+| Thuật toán | File |
+|---|---|
+| Greedy Best-First Search | `ai/informed/greedy.py` |
+| A* | `ai/informed/astar.py` |
+| IDA* | `ai/informed/idastar.py` |
+
+**Heuristic:** Minimum-assignment Manhattan distance — ghép các hạt chưa rơi với các hole trống sao cho tổng khoảng cách Manhattan là nhỏ nhất (`ai/informed/heuristics.py`).
+
+### Local Search
+
+| Thuật toán | File |
+|---|---|
+| Hill Climbing | `ai/local_search/hill_climbing.py` |
+| Local Beam Search | `ai/local_search/local_beam.py` |
+| Simulated Annealing | `ai/local_search/simulated_annealing.py` |
+
+### Complex Environment
+
+| Thuật toán | File |
+|---|---|
+| AND-OR Search | `ai/complex/and_or_search.py` |
+| Belief-State Search | `ai/complex/belief_state_search.py` |
+| Online Search (LRTA*) | `ai/complex/online_search.py` |
+
+### CSP (Constraint Satisfaction Problem)
+
+| Thuật toán | File |
+|---|---|
+| Backtracking | `ai/csp/backtracking.py` |
+| AC-3 | `ai/csp/ac3.py` |
+| Min-Conflicts | `ai/csp/min_conflicts.py` |
+
+### Adversarial / Stochastic Search
+
+| Thuật toán | File |
+|---|---|
+| Minimax | `ai/adversarial/minimax.py` |
+| Alpha-Beta Pruning | `ai/adversarial/alpha_beta.py` |
+| Expectimax | `ai/adversarial/expectimax.py` |
+
+## Cấu trúc thư mục
+
 ```
-
-## Cách dùng giao diện
-
-1. Mở app bằng `python main.py`.
-2. Ở menu chính, chọn một chế độ:
-   * `CHƠI GAME (PLAY)`: tự chơi.
-   * `AI SOLVER`: chọn thuật toán và replay lời giải.
-   * `TRÌNH DIỄN THUẬT TOÁN`: xem log từng bước của solver.
-   * `BÁO CÁO HIỆU NĂNG`: so sánh tất cả thuật toán.
-3. Chọn nhóm level và level.
-4. Với chế độ chơi thủ công:
-   * Click một squirrel để chọn.
-   * Dùng phím mũi tên hoặc `W A S D` để dịch mảnh 1 ô.
-   * Dùng reset/undo khi cần.
-5. Với chế độ AI:
-   * Chọn thuật toán trong dropdown.
-   * Bấm `GIẢI AI` hoặc `BẮT ĐẦU`.
-   * Dùng `TRƯỚC`, `TIẾP`, `TỰ CHẠY` để replay.
-
-## Kiểm tra project
-
-Các lệnh nên chạy trước khi nộp hoặc demo:
-
-```bash
-python -m compileall .
-python verify_core.py
-python -m pytest tests
+AI_Project/
+├── main.py                    # Entry point
+├── requirements.txt
+├── requirements-dev.txt
+├── verify_core.py             # Script kiểm tra nhanh core logic
+├── data/
+│   └── book_levels.json       # 32 levels (starter, junior, expert, master)
+├── core/
+│   ├── constants.py           # Hằng số game (BOARD_SIZE, directions, ...)
+│   ├── piece.py               # Lớp Piece
+│   ├── state.py               # Lớp GameState
+│   ├── rules.py               # Luật di chuyển và goal test
+│   └── level.py               # Load và validate level từ JSON
+├── ai/
+│   ├── solver_interface.py    # Interface chung cho tất cả solver
+│   ├── search_result.py       # Lớp SearchResult
+│   ├── limits.py              # Giới hạn tài nguyên (node, thời gian)
+│   ├── utils.py               # Utility functions
+│   ├── uninformed/            # BFS, DFS, IDS
+│   ├── informed/              # Greedy, A*, IDA*, heuristics
+│   ├── local_search/          # Hill Climbing, Local Beam, SA
+│   ├── complex/               # AND-OR, Belief-State, Online Search
+│   ├── csp/                   # Backtracking, AC-3, Min-Conflicts
+│   └── adversarial/           # Minimax, Alpha-Beta, Expectimax
+├── ui/
+│   ├── screen_manager.py      # Quản lý chuyển màn hình
+│   ├── font.py                # Quản lý font
+│   ├── components/            # UI components tái sử dụng
+│   ├── renderers/             # Render game board, pieces
+│   └── screens/               # Các màn hình (menu, play, solver, ...)
+└── tests/
+    ├── test_algorithm_smoke.py
+    ├── test_core_rules.py
+    ├── test_heuristics.py
+    ├── test_level_validation.py
+    └── test_solver_contracts.py
 ```
-
-Nếu chưa cài `pytest`, có thể chạy smoke test trực tiếp:
-
-```bash
-python tests/test_algorithm_smoke.py
-```
-
-`verify_core.py` kiểm tra load level, sinh legal actions, apply action và chạy toàn bộ thuật toán đã đăng ký.
-
-`tests/test_algorithm_smoke.py` chạy tất cả solver trên `starter_01` với giới hạn nhỏ, kiểm tra mỗi solver trả `SearchResult` đúng format.
-
-Các test pytest bổ sung kiểm tra luật core, validate level, heuristic matching và contract replay path của các solver chính.
 
 ## Dữ liệu level
 
-Level nằm trong:
-
-```text
-data/book_levels.json
-```
-
-Hiện có 4 nhóm difficulty:
+Level được lưu trong `data/book_levels.json`, gồm 32 level chia thành 4 nhóm:
 
 | Difficulty | Số level |
 |---|---:|
-| starter | 8 |
-| junior | 8 |
-| expert | 8 |
-| master | 8 |
+| Starter | 8 |
+| Junior | 8 |
+| Expert | 8 |
+| Master | 8 |
 
-Mỗi level khai báo:
+Mỗi level bao gồm:
+- `id`, `name`, `difficulty`, `target_moves`
+- `holes` — danh sách tọa độ các hole trên bàn cờ
+- `pieces` — danh sách squirrel/block với cells, vị trí nut và trạng thái
 
-* `id`, `name`, `difficulty`, `target_moves`.
-* `holes`: danh sách tọa độ lỗ.
-* `pieces`: danh sách squirrel/block với cells, nut và trạng thái hạt.
-
-`LevelManager` tự validate dữ liệu khi load level: kiểm tra overlap, out-of-bounds, duplicate id, duplicate hole, nut không nằm trong piece và level không có squirrel. Phần còn nên bổ sung nếu muốn chặt hơn là kiểm tra solvability tự động bằng benchmark giới hạn.
+`LevelManager` tự động validate dữ liệu khi load: kiểm tra overlap, out-of-bounds, duplicate id, duplicate hole, nut không thuộc piece và level thiếu squirrel.
 
 ## SearchResult
 
-Mọi solver trả về object `SearchResult` gồm:
+Mọi solver trả về đối tượng `SearchResult` với các field:
 
-| Field | Ý nghĩa |
+| Field | Kiểu | Mô tả |
+|---|---|---|
+| `algorithm` | `str` | Tên thuật toán |
+| `solved` | `bool` | Có tìm được lời giải không |
+| `path` | `list` | Danh sách action để replay |
+| `visited_count` | `int` | Số node/state đã duyệt |
+| `generated_count` | `int` | Số successor/candidate đã sinh |
+| `elapsed_time` | `float` | Thời gian chạy (giây) |
+| `steps` | `list` | Log state từng bước (cho visualizer) |
+| `extra` | `dict` | Metadata riêng của thuật toán |
+
+## Kiểm thử
+
+```bash
+# Kiểm tra cú pháp toàn bộ project
+python -m compileall .
+
+# Kiểm tra nhanh core logic và tất cả solver
+python verify_core.py
+
+# Chạy toàn bộ test suite (cần pytest)
+python -m pytest tests/
+
+# Chạy smoke test riêng lẻ (không cần pytest)
+python tests/test_algorithm_smoke.py
+```
+
+| Test file | Nội dung kiểm tra |
 |---|---|
-| `algorithm` | Tên thuật toán |
-| `solved` | Có tìm được lời giải hợp lệ không |
-| `path` | Danh sách action để replay |
-| `visited_count` | Số node/state/đơn vị đã duyệt |
-| `generated_count` | Số successor/candidate sinh ra |
-| `elapsed_time` | Thời gian chạy |
-| `steps` | Log state từng bước cho visualizer |
-| `extra` | Metadata riêng của thuật toán |
-
-Lưu ý: `visited_count` và `generated_count` giữa các nhóm thuật toán không luôn có cùng ý nghĩa tuyệt đối. Khi viết báo cáo, nên dùng chúng như chỉ số tham khảo trong từng nhóm thuật toán.
-
-## Kết luận
-
-Squirrels AI Solver là một project phù hợp để trình bày bài toán tìm kiếm trong AI: có mô hình trạng thái rõ, nhiều thuật toán, UI trực quan và màn report so sánh. Để đạt điểm cao hơn khi bảo vệ, nên ưu tiên chạy test đầy đủ, bổ sung benchmark solvability và mô tả cẩn thận những thuật toán mang tính thích nghi.
+| `test_algorithm_smoke.py` | Chạy tất cả solver trên `starter_01`, kiểm tra format `SearchResult` |
+| `test_core_rules.py` | Luật di chuyển, collision, goal test |
+| `test_heuristics.py` | Heuristic matching nut-to-hole |
+| `test_level_validation.py` | Validate dữ liệu level JSON |
+| `test_solver_contracts.py` | Contract replay path của các solver chính |
