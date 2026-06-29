@@ -32,7 +32,7 @@
 
 ```bash
 # Clone repository
-git clone <repository-url>
+git clone https://github.com/nhatnguyen10a1thd-png/AI_Project
 cd AI_Project
 
 # (Khuyến nghị) Tạo virtual environment
